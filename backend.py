@@ -157,7 +157,7 @@ def salvar():
         df = pd.DataFrame(columns=["Musica", "VideoID", "Cor1", "Cor2", "Cor3"])
 
     duplicado = (
-        (df["Musica"] == musica) &
+        (df["VideoID"] == videoId) &
         (df["Cor1"] == cor1) &
         (df["Cor2"] == cor2) &
         (df["Cor3"] == cor3)
