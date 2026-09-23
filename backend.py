@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask import Flask, jsonify, request, redirect, session
+from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
 
 from google_auth_oauthlib.flow import Flow
@@ -36,15 +36,24 @@ def login():
         scopes=["https://www.googleapis.com/auth/drive.file"]
     )
     auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline", include_granted_scopes="true")
-    session["flow"] = flow
     return redirect(auth_url)
 
 @app.route("/oauth2callback")
 def oauth2callback():
-    flow = session["flow"]
+    flow = Flow.from_client_config(
+        {
+            "web": {
+                "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
+                "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
+                "redirect_uris": ["https://meu-backend-jf73.onrender.com/oauth2callback"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        },
+        scopes=["https://www.googleapis.com/auth/drive.file"]
+    )
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    # Exibe o refresh token na tela para copiar
     return f"Login concluído! Copie este refresh token e salve no Render como GOOGLE_REFRESH_TOKEN: {creds.refresh_token}"
 
 def get_creds():
