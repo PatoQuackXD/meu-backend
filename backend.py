@@ -3,6 +3,16 @@ import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+import os, json
+from google.oauth2 import service_account
+
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
+
+# Carrega credenciais da variável de ambiente
+creds_json = json.loads(os.environ['GOOGLE_CREDENTIALS'])
+creds = service_account.Credentials.from_service_account_info(creds_json, scopes=SCOPES)
+
+
 app = Flask(__name__)
 CORS(app)  # habilita CORS corretamente
 
