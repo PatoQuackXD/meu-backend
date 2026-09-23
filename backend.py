@@ -35,7 +35,14 @@ def login():
         },
         scopes=["https://www.googleapis.com/auth/drive.file"]
     )
-    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline", include_granted_scopes="true")
+    # Linha essencial para evitar o erro "Missing required parameter: redirect_uri"
+    flow.redirect_uri = "https://meu-backend-jf73.onrender.com/oauth2callback"
+
+    auth_url, _ = flow.authorization_url(
+        prompt="consent",
+        access_type="offline",
+        include_granted_scopes="true"
+    )
     return redirect(auth_url)
 
 @app.route("/oauth2callback")
@@ -52,6 +59,7 @@ def oauth2callback():
         },
         scopes=["https://www.googleapis.com/auth/drive.file"]
     )
+    flow.redirect_uri = "https://meu-backend-jf73.onrender.com/oauth2callback"
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
     return f"Login concluído! Copie este refresh token e salve no Render como GOOGLE_REFRESH_TOKEN: {creds.refresh_token}"
@@ -74,19 +82,18 @@ def enviar_para_drive():
     results = service.files().list(q=query, fields="files(id, name)").execute()
     files = results.get('files', [])
 
-    media = MediaFileUpload(PLANILHA,
-                            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    media = MediaFileUpload(
+        PLANILHA,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
     if files:
         file_id = files[0]['id']
-        updated_file = service.files().update(fileId=file_id,
-                                              media_body=media).execute()
+        updated_file = service.files().update(fileId=file_id, media_body=media).execute()
         return updated_file.get('id')
     else:
         file_metadata = {'name': PLANILHA, 'parents': [FOLDER_ID]}
-        new_file = service.files().create(body=file_metadata,
-                                          media_body=media,
-                                          fields='id').execute()
+        new_file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
         return new_file.get('id')
 
 @app.route("/salvar", methods=["POST"])
