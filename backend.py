@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix  # <-- Import necessário
 
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -11,6 +12,9 @@ from google.oauth2.credentials import Credentials
 app = Flask(__name__)
 app.secret_key = "um-segredo-qualquer"
 CORS(app)
+
+# Faz o Flask respeitar HTTPS quando está atrás do proxy do Render
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 PLANILHA = "resultados.xlsx"
 FOLDER_ID = "1fk1bRxhuf5GOhz6LCQmXFZEd6_1vB3om"
@@ -35,7 +39,6 @@ def login():
         },
         scopes=["https://www.googleapis.com/auth/drive.file"]
     )
-    # Linha essencial para evitar o erro "Missing required parameter: redirect_uri"
     flow.redirect_uri = "https://meu-backend-jf73.onrender.com/oauth2callback"
 
     auth_url, _ = flow.authorization_url(
