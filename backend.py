@@ -37,7 +37,8 @@ def login():
                 "token_uri": "https://oauth2.googleapis.com/token"
             }
         },
-        scopes=["https://www.googleapis.com/auth/drive.file"]
+        scopes=["https://www.googleapis.com/auth/drive.file"],
+        use_pkce=False   # <-- Desabilita PKCE
     )
     flow.redirect_uri = "https://meu-backend-jf73.onrender.com/oauth2callback"
 
@@ -60,7 +61,8 @@ def oauth2callback():
                 "token_uri": "https://oauth2.googleapis.com/token"
             }
         },
-        scopes=["https://www.googleapis.com/auth/drive.file"]
+        scopes=["https://www.googleapis.com/auth/drive.file"],
+        use_pkce=False   # <-- Desabilita PKCE
     )
     flow.redirect_uri = "https://meu-backend-jf73.onrender.com/oauth2callback"
     flow.fetch_token(authorization_response=request.url)
