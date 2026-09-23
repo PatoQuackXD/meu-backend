@@ -1,4 +1,5 @@
 import os
+import requests
 import pandas as pd
 from flask import Flask, jsonify, request, redirect, session
 from flask_cors import CORS
@@ -18,6 +19,16 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 PLANILHA = "resultados.xlsx"
 FOLDER_ID = "1fk1bRxhuf5GOhz6LCQmXFZEd6_1vB3om"
+
+# Lista de chaves da YouTube Data API, separadas por vírgula na variável
+# de ambiente YOUTUBE_API_KEYS. Quando uma estoura a cota, tenta a próxima
+# automaticamente. Cada chave precisa ser de um projeto diferente no
+# Google Cloud, porque a cota é por projeto.
+YOUTUBE_API_KEYS = [k.strip() for k in os.environ.get("YOUTUBE_API_KEYS", "").split(",") if k.strip()]
+
+# Lembra qual foi a última chave que funcionou, pra próxima busca já
+# começar por ela em vez de sempre testar a #1 primeiro
+_indice_chave_atual = 0
 
 # Garante que a planilha existe
 if not os.path.exists(PLANILHA):
@@ -137,6 +148,61 @@ def baixar_planilha_do_drive():
             _, done = downloader.next_chunk()
 
     return True
+
+@app.route("/buscar", methods=["GET"])
+def buscar():
+    global _indice_chave_atual
+
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"error": {"message": "Parâmetro 'q' vazio"}}), 400
+
+    if not YOUTUBE_API_KEYS:
+        return jsonify({"error": {"message": "Nenhuma YOUTUBE_API_KEYS configurada no servidor"}}), 500
+
+    ultimo_erro_body = None
+    ultimo_status = 500
+    total = len(YOUTUBE_API_KEYS)
+
+    for tentativa in range(total):
+        indice = (_indice_chave_atual + tentativa) % total
+        key = YOUTUBE_API_KEYS[indice]
+
+        resp = requests.get(
+            "https://www.googleapis.com/youtube/v3/search",
+            params={
+                "part": "snippet",
+                "type": "video",
+                "maxResults": 5,
+                "q": query,
+                "key": key
+            },
+            timeout=10
+        )
+        corpo = resp.json()
+
+        if resp.status_code == 200:
+            _indice_chave_atual = indice  # próxima busca já começa por essa chave
+            return jsonify(corpo)
+
+        # Descobre o motivo do erro pra saber se vale tentar a próxima chave
+        motivo = ""
+        erros = corpo.get("error", {}).get("errors", [])
+        if erros:
+            motivo = erros[0].get("reason", "")
+
+        if resp.status_code in (403, 429) and motivo in ("quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded", "userRateLimitExceeded"):
+            # Essa chave estourou, tenta a próxima
+            ultimo_erro_body = corpo
+            ultimo_status = resp.status_code
+            continue
+
+        # Outro tipo de erro (chave inválida, API desativada, etc.) — não
+        # adianta tentar as outras, já retorna
+        return jsonify(corpo), resp.status_code
+
+    # Todas as chaves estouraram a cota
+    return jsonify(ultimo_erro_body or {"error": {"message": "Todas as chaves de API estouraram a cota"}}), ultimo_status
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
