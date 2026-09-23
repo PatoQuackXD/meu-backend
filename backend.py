@@ -1,10 +1,12 @@
 import os
+import json
 import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-import os, json
 from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
@@ -12,17 +14,24 @@ SCOPES = ['https://www.googleapis.com/auth/drive.file']
 creds_json = json.loads(os.environ['GOOGLE_CREDENTIALS'])
 creds = service_account.Credentials.from_service_account_info(creds_json, scopes=SCOPES)
 
-
 app = Flask(__name__)
-CORS(app)  # habilita CORS corretamente
-
+CORS(app)
 
 PLANILHA = "resultados.xlsx"
+FOLDER_ID = "1fk1bRxhuf5GOhz6LCQmXFZEd6_1vB3om"  # substitua pelo ID da pasta do Drive
 
 # Garante que a planilha existe
 if not os.path.exists(PLANILHA):
     df = pd.DataFrame(columns=["Musica", "VideoID", "Cor1", "Cor2", "Cor3"])
     df.to_excel(PLANILHA, index=False)
+
+def enviar_para_drive():
+    service = build('drive', 'v3', credentials=creds)
+    file_metadata = {'name': PLANILHA, 'parents': [FOLDER_ID]}
+    media = MediaFileUpload(PLANILHA,
+                            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+    return file.get('id')
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
@@ -35,7 +44,7 @@ def salvar():
 
     df = pd.read_excel(PLANILHA)
 
-    # Verifica se já existe a mesma música com as mesmas 3 cores
+    # Verifica duplicado
     duplicado = (
         (df["Musica"] == musica) &
         (df["Cor1"] == cor1) &
@@ -49,7 +58,11 @@ def salvar():
         df = pd.concat([df, novo], ignore_index=True)
         df.to_excel(PLANILHA, index=False)
 
-    return jsonify({"status": "ok", "mensagem": "Música enviada com sucesso!"})
+        # Envia para o Google Drive
+        file_id = enviar_para_drive()
+        return jsonify({"status": "ok", "mensagem": "Música enviada com sucesso!", "file_id": file_id})
+
+    return jsonify({"status": "ok", "mensagem": "Música já cadastrada!"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
