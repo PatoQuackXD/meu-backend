@@ -27,11 +27,28 @@ if not os.path.exists(PLANILHA):
 
 def enviar_para_drive():
     service = build('drive', 'v3', credentials=creds)
-    file_metadata = {'name': PLANILHA, 'parents': [FOLDER_ID]}
+
+    # Procura pelo arquivo resultados.xlsx dentro da pasta
+    query = f"name='{PLANILHA}' and '{FOLDER_ID}' in parents and trashed=false"
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    files = results.get('files', [])
+
     media = MediaFileUpload(PLANILHA,
                             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    return file.get('id')
+
+    if files:
+        # Se já existe, atualiza o conteúdo
+        file_id = files[0]['id']
+        updated_file = service.files().update(fileId=file_id,
+                                              media_body=media).execute()
+        return updated_file.get('id')
+    else:
+        # Se não existe, cria um novo
+        file_metadata = {'name': PLANILHA, 'parents': [FOLDER_ID]}
+        new_file = service.files().create(body=file_metadata,
+                                          media_body=media,
+                                          fields='id').execute()
+        return new_file.get('id')
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
@@ -58,7 +75,7 @@ def salvar():
         df = pd.concat([df, novo], ignore_index=True)
         df.to_excel(PLANILHA, index=False)
 
-        # Envia para o Google Drive
+        # Envia para o Google Drive (update ou create)
         file_id = enviar_para_drive()
         return jsonify({"status": "ok", "mensagem": "Música enviada com sucesso!", "file_id": file_id})
 
