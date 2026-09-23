@@ -15,14 +15,19 @@ CORS(app)
 PLANILHA = "resultados.xlsx"
 FOLDER_ID = "1fk1bRxhuf5GOhz6LCQmXFZEd6_1vB3om"
 
+# Garante que a planilha existe
+if not os.path.exists(PLANILHA):
+    df = pd.DataFrame(columns=["Musica", "VideoID", "Cor1", "Cor2", "Cor3"])
+    df.to_excel(PLANILHA, index=False)
+
 # --- Fluxo OAuth ---
 @app.route("/login")
 def login():
     flow = Flow.from_client_config(
         {
             "web": {
-                "client_id": os.environ["GOOGLE_CLIENT_ID"],
-                "client_secret": os.environ["GOOGLE_CLIENT_SECRET"],
+                "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
+                "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
                 "redirect_uris": ["https://meu-backend-jf73.onrender.com/oauth2callback"],
                 "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                 "token_uri": "https://oauth2.googleapis.com/token"
@@ -30,7 +35,7 @@ def login():
         },
         scopes=["https://www.googleapis.com/auth/drive.file"]
     )
-    auth_url, _ = flow.authorization_url(prompt="consent")
+    auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline", include_granted_scopes="true")
     session["flow"] = flow
     return redirect(auth_url)
 
@@ -39,17 +44,16 @@ def oauth2callback():
     flow = session["flow"]
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    # guarda refresh token em variável de ambiente para uso permanente
-    os.environ["GOOGLE_REFRESH_TOKEN"] = creds.refresh_token
-    return "Login concluído! Token salvo. Agora qualquer usuário pode enviar músicas."
+    # Exibe o refresh token na tela para copiar
+    return f"Login concluído! Copie este refresh token e salve no Render como GOOGLE_REFRESH_TOKEN: {creds.refresh_token}"
 
 def get_creds():
     return Credentials(
         token=None,
-        refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
+        refresh_token=os.environ.get("GOOGLE_REFRESH_TOKEN"),
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=os.environ["GOOGLE_CLIENT_ID"],
-        client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+        client_id=os.environ.get("GOOGLE_CLIENT_ID"),
+        client_secret=os.environ.get("GOOGLE_CLIENT_SECRET"),
         scopes=["https://www.googleapis.com/auth/drive.file"]
     )
 
@@ -85,7 +89,6 @@ def salvar():
     cor2 = data.get("cor2")
     cor3 = data.get("cor3")
 
-    # lê planilha local
     if os.path.exists(PLANILHA):
         df = pd.read_excel(PLANILHA)
     else:
