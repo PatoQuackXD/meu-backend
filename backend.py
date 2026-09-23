@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
-from werkzeug.middleware.proxy_fix import ProxyFix  # <-- Import necessário
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
@@ -65,7 +65,11 @@ def oauth2callback():
     flow.redirect_uri = "https://meu-backend-jf73.onrender.com/oauth2callback"
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    return f"Login concluído! Copie este refresh token e salve no Render como GOOGLE_REFRESH_TOKEN: {creds.refresh_token}"
+
+    if creds.refresh_token:
+        return f"Login concluído! Copie este refresh token e salve no Render como GOOGLE_REFRESH_TOKEN: {creds.refresh_token}"
+    else:
+        return "Erro: o Google não retornou refresh token. Vá em https://myaccount.google.com/permissions, remova o acesso do app e tente logar novamente."
 
 def get_creds():
     return Credentials(
