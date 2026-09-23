@@ -9,16 +9,11 @@ from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
 app = Flask(__name__)
-app.secret_key = "um-segredo-qualquer"  # necessário para sessão
+app.secret_key = "um-segredo-qualquer"
 CORS(app)
 
 PLANILHA = "resultados.xlsx"
-FOLDER_ID = "1fk1bRxhuf5GOhz6LCQmXFZEd6_1vB3om"  # ID da pasta no Drive
-
-# Garante que a planilha existe
-if not os.path.exists(PLANILHA):
-    df = pd.DataFrame(columns=["Musica", "VideoID", "Cor1", "Cor2", "Cor3"])
-    df.to_excel(PLANILHA, index=False)
+FOLDER_ID = "1fk1bRxhuf5GOhz6LCQmXFZEd6_1vB3om"
 
 # --- Fluxo OAuth ---
 @app.route("/login")
@@ -44,19 +39,22 @@ def oauth2callback():
     flow = session["flow"]
     flow.fetch_token(authorization_response=request.url)
     creds = flow.credentials
-    session["creds"] = creds_to_dict(creds)
-    return "Login concluído! Pode voltar ao app."
+    # guarda refresh token em variável de ambiente para uso permanente
+    os.environ["GOOGLE_REFRESH_TOKEN"] = creds.refresh_token
+    return "Login concluído! Token salvo. Agora qualquer usuário pode enviar músicas."
 
-def creds_to_dict(creds):
-    return {"token": creds.token,
-            "refresh_token": creds.refresh_token,
-            "token_uri": creds.token_uri,
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "scopes": creds.scopes}
+def get_creds():
+    return Credentials(
+        token=None,
+        refresh_token=os.environ["GOOGLE_REFRESH_TOKEN"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.environ["GOOGLE_CLIENT_ID"],
+        client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
+        scopes=["https://www.googleapis.com/auth/drive.file"]
+    )
 
-def enviar_para_drive(creds_dict):
-    creds = Credentials(**creds_dict)
+def enviar_para_drive():
+    creds = get_creds()
     service = build('drive', 'v3', credentials=creds)
 
     query = f"name='{PLANILHA}' and '{FOLDER_ID}' in parents and trashed=false"
@@ -80,11 +78,6 @@ def enviar_para_drive(creds_dict):
 
 @app.route("/salvar", methods=["POST"])
 def salvar():
-    if "creds" not in session:
-        return jsonify({"status": "erro", "mensagem": "Usuário não autenticado"}), 401
-
-    creds_dict = session["creds"]
-
     data = request.get_json()
     musica = data.get("musica")
     videoId = data.get("videoId")
@@ -92,7 +85,11 @@ def salvar():
     cor2 = data.get("cor2")
     cor3 = data.get("cor3")
 
-    df = pd.read_excel(PLANILHA)
+    # lê planilha local
+    if os.path.exists(PLANILHA):
+        df = pd.read_excel(PLANILHA)
+    else:
+        df = pd.DataFrame(columns=["Musica", "VideoID", "Cor1", "Cor2", "Cor3"])
 
     duplicado = (
         (df["Musica"] == musica) &
@@ -107,7 +104,7 @@ def salvar():
         df = pd.concat([df, novo], ignore_index=True)
         df.to_excel(PLANILHA, index=False)
 
-        file_id = enviar_para_drive(creds_dict)
+        file_id = enviar_para_drive()
         return jsonify({"status": "ok", "mensagem": "Música enviada com sucesso!", "file_id": file_id})
 
     return jsonify({"status": "ok", "mensagem": "Música já cadastrada!"})
