@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Render backend
-        run: curl -s https://meu-backend-jf73.onrender.com/salvar || true
+        run: curl -s https://meu-backend-jf73.onrender.com/saude || true
