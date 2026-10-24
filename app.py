@@ -10,8 +10,9 @@ O que ele faz:
 
 Variáveis de ambiente (configure no Render, aba Environment):
   SUPABASE_URL                 endereço do projeto, ex.: https://abcd1234.supabase.co
-  SUPABASE_ANON_KEY            chave "anon public" (a mesma do site)
-  SUPABASE_SERVICE_ROLE_KEY    chave SECRETA "service_role" (só aqui, nunca no site)
+  SUPABASE_ANON_KEY            chave pública do site: "publishable" (sb_publishable_...) ou "anon" (eyJ...)
+  SUPABASE_SERVICE_ROLE_KEY    chave SECRETA: "secret" (sb_secret_...) ou "service_role" (eyJ...).
+                               Só aqui, nunca no site.
   FRONTEND_ORIGINS             (opcional) sites autorizados a chamar este backend,
                                separados por vírgula
 
@@ -146,11 +147,16 @@ def resumo_faixa(f):
 
 
 def cabecalhos_service():
-    return {
-        "apikey": SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-        "Content-Type": "application/json",
-    }
+    """Cabeçalhos para falar com o banco com poderes de administrador.
+
+    Chave antiga (service_role) é um JWT e vai também em "Authorization".
+    Chave nova (sb_secret_...) NÃO é JWT: se for enviada em "Authorization", o
+    Supabase recusa com "Invalid JWT". Ela vai só em "apikey".
+    """
+    cab = {"apikey": SUPABASE_SERVICE_KEY, "Content-Type": "application/json"}
+    if not SUPABASE_SERVICE_KEY.startswith("sb_"):
+        cab["Authorization"] = f"Bearer {SUPABASE_SERVICE_KEY}"
+    return cab
 
 
 # ---------------------------------------------------------------------
